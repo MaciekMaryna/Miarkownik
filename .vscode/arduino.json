@@ -1,0 +1,7 @@
+{
+    "sketch": "Miarkownik.ino",
+    "output": "build",
+    "board": "arduino:avr:uno",
+    "programmer": "avrispmkii",
+    "port": "COM6"
+}

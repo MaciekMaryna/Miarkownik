@@ -1,0 +1,82 @@
+[
+  {
+    "Sourcefile": null,
+    "Include": "",
+    "Includepath": "C:\\Users\\maryn\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.6\\cores\\arduino"
+  },
+  {
+    "Sourcefile": null,
+    "Include": "",
+    "Includepath": "C:\\Users\\maryn\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.6\\variants\\standard"
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\build\\sketch\\Miarkownik.ino.cpp",
+    "Include": "Servo.h",
+    "Includepath": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Servo-1.2.1\\src"
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\build\\sketch\\Miarkownik.ino.cpp",
+    "Include": "OneWire.h",
+    "Includepath": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\OneWire"
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\build\\sketch\\Miarkownik.ino.cpp",
+    "Include": "DS18B20.h",
+    "Includepath": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\DS18B20"
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\build\\sketch\\Miarkownik.ino.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Servo-1.2.1\\src\\avr\\Servo.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Servo-1.2.1\\src\\mbed\\Servo.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Servo-1.2.1\\src\\megaavr\\Servo.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Servo-1.2.1\\src\\nrf52\\Servo.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Servo-1.2.1\\src\\renesas\\Servo.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Servo-1.2.1\\src\\sam\\Servo.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Servo-1.2.1\\src\\samd\\Servo.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Servo-1.2.1\\src\\stm32f4\\Servo.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\OneWire\\OneWire.cpp",
+    "Include": "",
+    "Includepath": null
+  },
+  {
+    "Sourcefile": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\DS18B20\\DS18B20.cpp",
+    "Include": "",
+    "Includepath": null
+  }
+]

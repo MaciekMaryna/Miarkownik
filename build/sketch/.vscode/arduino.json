@@ -1,0 +1,8 @@
+#line 1 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\.vscode\\arduino.json"
+{
+    "sketch": "Miarkownik.ino",
+    "output": "build",
+    "board": "arduino:avr:uno",
+    "programmer": "avrispmkii",
+    "port": "COM6"
+}
