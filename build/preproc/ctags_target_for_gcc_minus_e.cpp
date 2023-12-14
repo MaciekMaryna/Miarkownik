@@ -1,65 +1,84 @@
 # 1 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-/**************************************************
+/*================================================*
 
- *** Includes**************************************
+ * Includes
 
- **************************************************/
+ *================================================*/
 # 4 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-// #include <TimerOne.h>
+# 5 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 2
 # 6 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 2
 # 7 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 2
-# 8 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 2
 
-/**************************************************
+// servo libs
+# 10 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 2
+# 11 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 2
 
- *** Defines **************************************
+/*================================================*
 
- **************************************************/
-# 31 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-/**************************************************
+ * Defines
 
- *** Macros ***************************************
-
- **************************************************/
-# 35 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-/**************************************************
-
- *** Global variables *****************************
-
- **************************************************/
+ *================================================*/
 # 38 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+/*================================================*
+
+ *  Macros
+
+ *================================================*/
+# 42 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+/*================================================*
+
+ * Structures and type defs
+
+ *================================================*/
+# 46 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+typedef struct Data
+{
+    uint32_t TimeStamp; // SysTick dump of measurement
+    uint8_t TempNominal;
+    uint8_t TempActual;
+    uint8_t Temp[6 - 1];
+    uint8_t ServoPosition;
+
+} Data_t;
+
+/*================================================*
+
+ * Global variables
+
+ *================================================*/
+# 59 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 uint32_t SysTick = 0;
 uint32_t LastSysTick = 0;
 
-Servo myServo;
+Data_t SystemState;
 
-const byte sensorsAddress[(6)][8] 
-# 43 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
-                                                   __attribute__((__progmem__)) 
-# 43 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-                                                           = {
-    0x28, 0xA0, 0x7D, 0x81, 0x4D, 0x20, 0x1, 0x2B, 0x28, 0x50, 0xD2, 0x9B, 0x4D, 0x20, 0x1, 0x26, 0x28, 0x6E, 0xCA, 0x86, 0x4D, 0x20, 0x1, 0x3F, 0x28, 0xB7, 0xC, 0xA6, 0x4D, 0x20, 0x1, 0xA3, 0x28, 0xFF, 0x4D, 0xE4, 0xC1, 0x17, 0x5, 0x4F, 0x28, 0xFF, 0x6B, 0xCB, 0x83, 0x17, 0x4, 0xE1};
+// Servo driver PCA9685
+Adafruit_PWMServoDriver myPwmDriver = Adafruit_PWMServoDriver();
+
+const byte MyTempSensorsAddress[6][8] 
+# 67 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
+                                                          __attribute__((__progmem__)) 
+# 67 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+                                                                  = {
+    0x28, 0xA0, 0x7D, 0x81, 0x4D, 0x20, 0x1, 0x2B /* Actual temp sensor!!!*/, 0x28, 0x50, 0xD2, 0x9B, 0x4D, 0x20, 0x1, 0x26, 0x28, 0x6E, 0xCA, 0x86, 0x4D, 0x20, 0x1, 0x3F, 0x28, 0xB7, 0xC, 0xA6, 0x4D, 0x20, 0x1, 0xA3, 0x28, 0xFF, 0x4D, 0xE4, 0xC1, 0x17, 0x5, 0x4F, 0x28, 0xFF, 0x6B, 0xCB, 0x83, 0x17, 0x4, 0xE1};
 
 // 1-Wire object
-OneWire onewire((2));
-// DS18B20 sensors object
-DS18B20 sensors(&onewire);
+OneWire onewire(2);
+// DS18B20 MyTempSensors object
+DS18B20 MyTempSensors(&onewire);
 
-/**************************************************
+/*================================================*
 
- *** Arduino config function **********************
+ * Arduino config function
 
- **************************************************/
-# 54 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+ *================================================*/
+# 78 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void setup()
 {
-    /*Servo Config*/
-    myServo.attach((9));
 
     /*Sys Timer Config*/
-    // doesn't work because using the same interrupt as Servo lib
-    //  Timer1.initialize(SYS_TIC_PERIOD); // 1000 = 1ms
-    //  Timer1.attachInterrupt(SysTickIrq);
+    Timer1.initialize(1000 /* microseconds*/);
+    Timer1.attachInterrupt(SysTickIrq);
 
     /* GPIO Config */
     pinMode(13, 0x1);
@@ -67,127 +86,115 @@ void setup()
     /*Serial Port Config*/
     Serial.begin(115200);
 
-    // DS18B20 sensors setup
-    sensors.begin();
+    // DS18B20 MyTempSensors setup
+    MyTempSensors.begin();
 
-    // The first requests to all sensors for measurement
-    sensors.request();
+    // The first requests to all MyTempSensors for measurement
+    MyTempSensors.request();
+
+    // Servo config
+    myPwmDriver.begin();
+    myPwmDriver.setPWMFreq(60);
 }
 
-/**************************************************
+/*================================================*
 
- *** Functions ************************************
+ * Functions
 
- **************************************************/
-# 80 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+ *================================================*/
+# 105 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void SysTickIrq()
 {
+    
+# 107 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
+   __asm__ __volatile__ ("cli" ::: "memory")
+# 107 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+                 ;
+
     SysTick++;
+
+    
+# 111 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
+   __asm__ __volatile__ ("sei" ::: "memory")
+# 111 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+               ;
 }
 
-bool Led_Toggle(uint8_t pin)
-{
-    bool Led_State = digitalRead(pin);
+/*================================================*
 
-    if (false == Led_State)
-    {
-        Led_State = true;
-    }
-    else
-    {
-        Led_State = false;
-    }
+ * Main routine
 
-    digitalWrite(pin, Led_State);
-    return Led_State;
-}
-
-void Show()
-{
-    Serial.print("SysTck: ");
-    Serial.print(SysTick);
-}
-
-/**************************************************
-
- *** Main routine**********************************
-
- **************************************************/
-# 112 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+ *================================================*/
+# 118 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void loop()
 {
     uint8_t Srv_MinimalPos = 0;
     uint8_t Srv_ActualPos;
     uint8_t Srv_NominalPos = 36;
     uint8_t NormalBodyTemp = 36;
-    LastSysTick = SysTick;
 
-    myServo.write(10);
+    MyTempSensors.request();
 
     while (1)
     {
 
-        Srv_ActualPos = Srv_NominalPos -
-                        Srv_NominalPos * (uint8_t)sensors.readTemperature(( reinterpret_cast< const __FlashStringHelper * >( sensorsAddress[5] ) )) / NormalBodyTemp;
-
-        if (0 == SysTick % 100)
+        if (SysTick >= LastSysTick + 1000 /* 1000*/)
         {
+            LastSysTick = SysTick;
+            SystemState.TimeStamp = LastSysTick;
 
-            //  If the sesor measurement is ready, prnt the results
-            if (sensors.available())
+            if (MyTempSensors.available())
             {
-                for (byte i = 0; i < (6); i++)
+                SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(( reinterpret_cast< const __FlashStringHelper * >( MyTempSensorsAddress[0] ) ));
+                for (byte i = 1; i < 6; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
                 {
-                    // Reads the temperature from sensor
-                    // *** Indexed address from Flash memory
-                    float temperature = sensors.readTemperature(( reinterpret_cast< const __FlashStringHelper * >( sensorsAddress[i] ) ));
-
-                    // Prints the temperature on Serial Monitor
-                    Serial.print((reinterpret_cast<const __FlashStringHelper *>(
-# 141 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
-                                (__extension__({static const char __c[] __attribute__((__progmem__)) = (
-# 141 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-                                "#"
-# 141 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
-                                ); &__c[0];}))
-# 141 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-                                )));
-                    Serial.print(i + 1);
-                    Serial.print((reinterpret_cast<const __FlashStringHelper *>(
-# 143 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
-                                (__extension__({static const char __c[] __attribute__((__progmem__)) = (
-# 143 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-                                ": "
-# 143 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
-                                ); &__c[0];}))
-# 143 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-                                )));
-                    Serial.print(temperature);
-                    Serial.print((reinterpret_cast<const __FlashStringHelper *>(
-# 145 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
-                                (__extension__({static const char __c[] __attribute__((__progmem__)) = (
-# 145 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-                                "'C   "
-# 145 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
-                                ); &__c[0];}))
-# 145 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-                                )));
+                    SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(( reinterpret_cast< const __FlashStringHelper * >( MyTempSensorsAddress[i] ) ));
                 }
-                Serial.print((reinterpret_cast<const __FlashStringHelper *>(
-# 147 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
-                            (__extension__({static const char __c[] __attribute__((__progmem__)) = (
-# 147 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-                            "SysTick: "
-# 147 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
-                            ); &__c[0];}))
-# 147 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-                            )));
-                Serial.println(myServo.read());
-
-                // Another requests to all sensors for measurement
-                sensors.request();
+                MyTempSensors.request();
             }
         }
-        SysTick++;
+
+        // if (SysTick >= LastSysTick + CALCULATION_PERIOD)
+        {
+            // LastSysTick = SysTick;
+            SystemState.ServoPosition = 150 + (SystemState.TempActual - 22) * 30;
+        }
+
+        // if (SysTick >= LastSysTick + SERVO_UPDATE_PERIOD)
+        {
+            // LastSysTick = SysTick;
+            myPwmDriver.setPWM(0 /* channel of PWM driver 0..15*/, 0, SystemState.ServoPosition);
+        }
+
+        if (SysTick >= LastSysTick + 1000 /* target pertiod = 60000 (60s)*/)
+        {
+            // TODO serialization
+
+            // LastSysTick = SysTick;
+            Data_t *pSystemState = &SystemState;
+
+            for (int i = 0; i < sizeof(SystemState), i++)
+            {
+                Serial.print(*pSystemState);
+                pSystemState++
+            }
+
+            // Serial.print(SystemState.TimeStamp);
+            // Serial.print(", ");
+
+            // Serial.print(SystemState.TempNominal);
+            // Serial.print(", ");
+
+            // Serial.print(SystemState.TempActual);
+            // Serial.print(", ");
+
+            // for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++)
+            // {
+            //     Serial.print(SystemState.Temp[i - 1]);
+            //     Serial.print(", ");
+            // }
+
+            // Serial.println(SystemState.ServoPosition);
+        }
     }
 }
