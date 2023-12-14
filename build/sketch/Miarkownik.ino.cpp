@@ -1,78 +1,95 @@
 #include <Arduino.h>
 #line 1 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-/**************************************************
- *** Includes**************************************
- **************************************************/
-// #include <TimerOne.h>
-#include <Servo.h>
+/*================================================*
+ * Includes
+ *================================================*/
+#include <TimerOne.h>
 #include <OneWire.h>
 #include <DS18B20.h>
 
-/**************************************************
- *** Defines **************************************
- **************************************************/
-#define SYS_TIC_PERIOD (100000) // microseconds
-#define TICKS_PER_SEC (1000000 / SYS_TIC_PERIOD)
-#define LED_PERIOD (300)
+// servo libs
+#include <Wire.h>
+#include <Adafruit_PWMServoDriver.h>
 
-#define ON true
-#define OFF false
+/*================================================*
+ * Defines
+ *================================================*/
+#define SYS_TIC_PERIOD 1000                      // microseconds
+#define TICKS_PER_SEC (1000000 / SYS_TIC_PERIOD) // freq of SysTck
 
-#define SERVO_PIN (9)
+#define LED_PERIOD 300
+#define DATA_SEND_PERIOD 1000    // target pertiod = 60000 (60s)
+#define TEMP_READ_PERIOD 1000    // 1000
+#define SERVO_UPDATE_PERIOD 1000 // 1000
+#define CALCULATION_PERIOD 1000
 
-#define ONEWIRE_PIN (2)
+#define SERVO_NUM_0 0 // channel of PWM driver 0..15
+#define SERVO_MIN 150
+#define SERVO_MAX 600
 
-#define T1 0x28, 0xA0, 0x7D, 0x81, 0x4D, 0x20, 0x1, 0x2B
+#define ONEWIRE_PIN 2
+
+#define T1 0x28, 0xA0, 0x7D, 0x81, 0x4D, 0x20, 0x1, 0x2B // Actual temp sensor!!!
 #define T2 0x28, 0x50, 0xD2, 0x9B, 0x4D, 0x20, 0x1, 0x26
 #define T3 0x28, 0x6E, 0xCA, 0x86, 0x4D, 0x20, 0x1, 0x3F
 #define T4 0x28, 0xB7, 0xC, 0xA6, 0x4D, 0x20, 0x1, 0xA3
 #define T5 0x28, 0xFF, 0x4D, 0xE4, 0xC1, 0x17, 0x5, 0x4F
 #define T6 0x28, 0xFF, 0x6B, 0xCB, 0x83, 0x17, 0x4, 0xE1
 
-#define NUMBER_OF_TEMPSENSORS (6)
-/**************************************************
- *** Macros ***************************************
- **************************************************/
+#define NUMBER_OF_TEMP_SENSORS 6
+/*================================================*
+ *  Macros
+ *================================================*/
 
-/**************************************************
- *** Global variables *****************************
- **************************************************/
+/*================================================*
+ * Structures and type defs
+ *================================================*/
+
+typedef struct Data
+{
+    uint32_t TimeStamp; // SysTick dump of measurement
+    uint8_t TempNominal;
+    uint8_t TempActual;
+    uint8_t Temp[NUMBER_OF_TEMP_SENSORS - 1];
+    uint8_t ServoPosition;
+
+} Data_t;
+
+/*================================================*
+ * Global variables
+ *================================================*/
 uint32_t SysTick = 0;
 uint32_t LastSysTick = 0;
 
-Servo myServo;
+Data_t SystemState;
 
-const byte sensorsAddress[NUMBER_OF_TEMPSENSORS][8] PROGMEM = {
+// Servo driver PCA9685
+Adafruit_PWMServoDriver myPwmDriver = Adafruit_PWMServoDriver();
+
+const byte MyTempSensorsAddress[NUMBER_OF_TEMP_SENSORS][8] PROGMEM = {
     T1, T2, T3, T4, T5, T6};
 
 // 1-Wire object
 OneWire onewire(ONEWIRE_PIN);
-// DS18B20 sensors object
-DS18B20 sensors(&onewire);
+// DS18B20 MyTempSensors object
+DS18B20 MyTempSensors(&onewire);
 
-/**************************************************
- *** Arduino config function **********************
- **************************************************/
-#line 54 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+/*================================================*
+ * Arduino config function
+ *================================================*/
+#line 78 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void setup();
-#line 80 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+#line 105 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void SysTickIrq();
-#line 85 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-bool Led_Toggle(uint8_t pin);
-#line 102 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-void Show();
-#line 112 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+#line 118 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void loop();
-#line 54 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+#line 78 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void setup()
 {
-    /*Servo Config*/
-    myServo.attach(SERVO_PIN);
 
     /*Sys Timer Config*/
-    // doesn't work because using the same interrupt as Servo lib
-    //  Timer1.initialize(SYS_TIC_PERIOD); // 1000 = 1ms
-    //  Timer1.attachInterrupt(SysTickIrq);
+    Timer1.initialize(SYS_TIC_PERIOD);
+    Timer1.attachInterrupt(SysTickIrq);
 
     /* GPIO Config */
     pinMode(LED_BUILTIN, OUTPUT);
@@ -80,47 +97,32 @@ void setup()
     /*Serial Port Config*/
     Serial.begin(115200);
 
-    // DS18B20 sensors setup
-    sensors.begin();
+    // DS18B20 MyTempSensors setup
+    MyTempSensors.begin();
 
-    // The first requests to all sensors for measurement
-    sensors.request();
+    // The first requests to all MyTempSensors for measurement
+    MyTempSensors.request();
+
+    // Servo config
+    myPwmDriver.begin();
+    myPwmDriver.setPWMFreq(60);
 }
 
-/**************************************************
- *** Functions ************************************
- **************************************************/
+/*================================================*
+ * Functions
+ *================================================*/
 void SysTickIrq()
 {
+    noInterrupts();
+
     SysTick++;
+
+    interrupts();
 }
 
-bool Led_Toggle(uint8_t pin)
-{
-    bool Led_State = digitalRead(pin);
-
-    if (false == Led_State)
-    {
-        Led_State = true;
-    }
-    else
-    {
-        Led_State = false;
-    }
-
-    digitalWrite(pin, Led_State);
-    return Led_State;
-}
-
-void Show()
-{
-    Serial.print("SysTck: ");
-    Serial.print(SysTick);
-}
-
-/**************************************************
- *** Main routine**********************************
- **************************************************/
+/*================================================*
+ * Main routine
+ *================================================*/
 
 void loop()
 {
@@ -128,43 +130,69 @@ void loop()
     uint8_t Srv_ActualPos;
     uint8_t Srv_NominalPos = 36;
     uint8_t NormalBodyTemp = 36;
-    LastSysTick = SysTick;
 
-    myServo.write(10);
+    MyTempSensors.request();
 
     while (1)
     {
 
-        Srv_ActualPos = Srv_NominalPos -
-                        Srv_NominalPos * (uint8_t)sensors.readTemperature(FA(sensorsAddress[5])) / NormalBodyTemp;
-
-        if (0 == SysTick % 100)
+        if (SysTick >= LastSysTick + TEMP_READ_PERIOD)
         {
+            LastSysTick = SysTick;
+            SystemState.TimeStamp = LastSysTick;
 
-            //  If the sesor measurement is ready, prnt the results
-            if (sensors.available())
+            if (MyTempSensors.available())
             {
-                for (byte i = 0; i < NUMBER_OF_TEMPSENSORS; i++)
+                SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[0]));
+                for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
                 {
-                    // Reads the temperature from sensor
-                    // *** Indexed address from Flash memory
-                    float temperature = sensors.readTemperature(FA(sensorsAddress[i]));
-
-                    // Prints the temperature on Serial Monitor
-                    Serial.print(F("#"));
-                    Serial.print(i + 1);
-                    Serial.print(F(": "));
-                    Serial.print(temperature);
-                    Serial.print(F("'C   "));
+                    SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[i]));
                 }
-                Serial.print(F("SysTick: "));
-                Serial.println(myServo.read());
-
-                // Another requests to all sensors for measurement
-                sensors.request();
+                MyTempSensors.request();
             }
         }
-        SysTick++;
+
+        // if (SysTick >= LastSysTick + CALCULATION_PERIOD)
+        {
+            // LastSysTick = SysTick;
+            SystemState.ServoPosition = SERVO_MIN + (SystemState.TempActual - 22) * 30;
+        }
+
+        // if (SysTick >= LastSysTick + SERVO_UPDATE_PERIOD)
+        {
+            // LastSysTick = SysTick;
+            myPwmDriver.setPWM(SERVO_NUM_0, 0, SystemState.ServoPosition);
+        }
+
+        if (SysTick >= LastSysTick + DATA_SEND_PERIOD)
+        {
+            // TODO serialization
+
+            // LastSysTick = SysTick;
+            Data_t *pSystemState = &SystemState;
+
+            for (int i = 0; i < sizeof(SystemState), i++)
+            {
+                Serial.print(*pSystemState);
+                pSystemState++
+            }
+
+            // Serial.print(SystemState.TimeStamp);
+            // Serial.print(", ");
+
+            // Serial.print(SystemState.TempNominal);
+            // Serial.print(", ");
+
+            // Serial.print(SystemState.TempActual);
+            // Serial.print(", ");
+
+            // for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++)
+            // {
+            //     Serial.print(SystemState.Temp[i - 1]);
+            //     Serial.print(", ");
+            // }
+
+            // Serial.println(SystemState.ServoPosition);
+        }
     }
 }
-
