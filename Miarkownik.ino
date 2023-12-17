@@ -21,7 +21,7 @@
 #define SERVO_UPDATE_PERIOD 1000 // 1000
 #define CALCULATION_PERIOD 1000
 
-#define SERVO_NUM_0 0 // channel of PWM driver 0..15
+#define SERVO_CHANNEL 0 // channel of PWM driver 0..15
 #define SERVO_MIN 150
 #define SERVO_MAX 600
 
@@ -38,19 +38,31 @@
 /*================================================*
  *  Macros
  *================================================*/
+/*================================================*
+ *  Enums
+ *================================================*/
+enum SystemError_t
+{
+    NO_ERROR,
+    NOT_INITIALIZED,
+    GENERAL_TEMP_SENSORS_ERROR,
+    SPECIFIC_TEMP_SENSORS_ERROR,
+    NUMBER_OF_ERRORS
+};
 
 /*================================================*
  * Structures and type defs
  *================================================*/
-
 typedef struct Data
 {
-    uint32_t TimeStamp; // SysTick dump of measurement
-    uint8_t TempNominal;
+    uint8_t TempNominal; // first position should have one byte width
     uint8_t TempActual;
     uint8_t Temp[NUMBER_OF_TEMP_SENSORS - 1];
     uint8_t ServoPosition;
+    uint32_t TimeStamp;
 
+    SystemError_t PreviewError;
+    SystemError_t Error;
 } Data_t;
 
 /*================================================*
@@ -88,19 +100,19 @@ void setup()
     /*Serial Port Config*/
     Serial.begin(115200);
 
-    // DS18B20 MyTempSensors setup
+    /* DS18B20 MyTempSensors setup */
     MyTempSensors.begin();
 
-    // The first requests to all MyTempSensors for measurement
+    /* The first requests to all MyTempSensors for measurement */
     MyTempSensors.request();
 
-    // Servo config
+    /* Servo config */
     myPwmDriver.begin();
     myPwmDriver.setPWMFreq(60);
 }
 
 /*================================================*
- * Functions
+ * Interrrupt Routines
  *================================================*/
 void SysTickIrq()
 {
@@ -112,18 +124,47 @@ void SysTickIrq()
 }
 
 /*================================================*
+ * Functions
+ *================================================*/
+void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError)
+{
+    // TODO change to macro
+    if (SystemState->Error != IncomingError)
+    {
+        SystemState->PreviewError = SystemState->Error;
+        SystemState->Error = IncomingError;
+    }
+}
+
+SystemError_t InitSystem(Data_t *SystemState)
+{
+    SystemError_t ReturnValue = NOT_INITIALIZED;
+    SystemState->Error = ReturnValue;
+    SystemState->TempNominal = 55;
+    SystemState->ServoPosition = SERVO_MIN;
+
+    if (!MyTempSensors.available())
+    {
+        ReturnValue = GENERAL_TEMP_SENSORS_ERROR;
+    }
+    else
+    {
+        ReturnValue = NO_ERROR;
+    }
+    ErrorStatusChange(SystemState, ReturnValue);
+    return ReturnValue;
+}
+
+/*================================================*
  * Main routine
  *================================================*/
 
 void loop()
 {
-    uint8_t Srv_MinimalPos = 0;
-    uint8_t Srv_ActualPos;
-    uint8_t Srv_NominalPos = 36;
-    uint8_t NormalBodyTemp = 36;
+
+    InitSystem(&SystemState);
 
     MyTempSensors.request();
-
     while (1)
     {
 
@@ -152,19 +193,22 @@ void loop()
         // if (SysTick >= LastSysTick + SERVO_UPDATE_PERIOD)
         {
             // LastSysTick = SysTick;
-            myPwmDriver.setPWM(SERVO_NUM_0, 0, SystemState.ServoPosition);
+            myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition);
         }
 
         if (SysTick >= LastSysTick + DATA_SEND_PERIOD)
         {
             // LastSysTick = SysTick;
-            Data_t *pSystemState = &SystemState;
+            uint8_t CRC = 0xFF;                                    // TODO calculation if neaded
+            uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
 
-            for (int i = 0; i < sizeof(SystemState), i++)
+            for (int i = 0; i < sizeof(Data_t); i++)
             {
-                Serial.print(*pSystemState);
-                pSystemState++
+                Serial.print(*pSystemStateBytes);
+                Serial.print(", ");
+                pSystemStateBytes++;
             }
+            Serial.println(CRC);
         }
     }
 }
