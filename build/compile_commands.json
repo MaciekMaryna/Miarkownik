@@ -286,11 +286,11 @@
    "-IC:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_PWM_Servo_Driver_Library",
    "-IC:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO",
    "-IC:\\Users\\maryn\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.6\\libraries\\SPI\\src",
-   "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO\\Adafruit_I2CDevice.cpp",
+   "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO\\Adafruit_SPIDevice.cpp",
    "-o",
-   "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\build\\libraries\\Adafruit_BusIO\\Adafruit_I2CDevice.cpp.o"
+   "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\build\\libraries\\Adafruit_BusIO\\Adafruit_SPIDevice.cpp.o"
   ],
-  "file": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO\\Adafruit_I2CDevice.cpp"
+  "file": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO\\Adafruit_SPIDevice.cpp"
  },
  {
   "directory": "c:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik",
@@ -360,11 +360,11 @@
    "-IC:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_PWM_Servo_Driver_Library",
    "-IC:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO",
    "-IC:\\Users\\maryn\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.6\\libraries\\SPI\\src",
-   "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO\\Adafruit_SPIDevice.cpp",
+   "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO\\Adafruit_I2CDevice.cpp",
    "-o",
-   "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\build\\libraries\\Adafruit_BusIO\\Adafruit_SPIDevice.cpp.o"
+   "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\build\\libraries\\Adafruit_BusIO\\Adafruit_I2CDevice.cpp.o"
   ],
-  "file": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO\\Adafruit_SPIDevice.cpp"
+  "file": "C:\\Users\\maryn\\OneDrive\\Dokumenty\\Arduino\\libraries\\Adafruit_BusIO\\Adafruit_I2CDevice.cpp"
  },
  {
   "directory": "c:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik",

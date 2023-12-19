@@ -46,7 +46,7 @@ enum SystemError_t
 
  *================================================*/
 # 56 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-typedef struct Data
+typedef struct
 {
     uint8_t TempNominal; // first position should have one byte width
     uint8_t TempActual;
@@ -54,16 +54,25 @@ typedef struct Data
     uint8_t ServoPosition;
     uint32_t TimeStamp;
 
-    SystemError_t PreviewError;
-    SystemError_t Error;
+    uint8_t PreviewError;
+    uint8_t Error;
 } Data_t;
+
+typedef struct
+{
+    void (*pFunction)(void);
+    uint32_t StartTaskSysTick;
+    uint32_t EndTaskSysTick;
+    uint32_t TaskRunsCounter;
+    uint32_t CallPeriod; // TODO perhaps magic numbers to set the calling periods will be not needed any more
+} Task_t;
 
 /*================================================*
 
  * Global variables
 
  *================================================*/
-# 71 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 80 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 uint32_t SysTick = 0;
 uint32_t LastSysTick = 0;
 
@@ -73,9 +82,9 @@ Data_t SystemState;
 Adafruit_PWMServoDriver myPwmDriver = Adafruit_PWMServoDriver();
 
 const byte MyTempSensorsAddress[6][8] 
-# 79 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
+# 88 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
                                                           __attribute__((__progmem__)) 
-# 79 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 88 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
                                                                   = {
     0x28, 0xA0, 0x7D, 0x81, 0x4D, 0x20, 0x1, 0x2B /* Actual temp sensor!!!*/, 0x28, 0x50, 0xD2, 0x9B, 0x4D, 0x20, 0x1, 0x26, 0x28, 0x6E, 0xCA, 0x86, 0x4D, 0x20, 0x1, 0x3F, 0x28, 0xB7, 0xC, 0xA6, 0x4D, 0x20, 0x1, 0xA3, 0x28, 0xFF, 0x4D, 0xE4, 0xC1, 0x17, 0x5, 0x4F, 0x28, 0xFF, 0x6B, 0xCB, 0x83, 0x17, 0x4, 0xE1};
 
@@ -86,10 +95,19 @@ DS18B20 MyTempSensors(&onewire);
 
 /*================================================*
 
+ * RTOS Global variables
+
+ *================================================*/
+# 100 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+// set metric for all of the tasks which running prediodicaly win main loop
+Task_t *PwmRoutineMetric; // TODO find better name instead ...Metric
+
+/*================================================*
+
  * Arduino config function
 
  *================================================*/
-# 90 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 106 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void setup()
 {
 
@@ -119,21 +137,21 @@ void setup()
  * Interrrupt Routines
 
  *================================================*/
-# 117 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 133 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void SysTickIrq()
 {
     
-# 119 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
+# 135 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
    __asm__ __volatile__ ("cli" ::: "memory")
-# 119 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 135 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
                  ;
 
     SysTick++;
 
     
-# 123 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
+# 139 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
    __asm__ __volatile__ ("sei" ::: "memory")
-# 123 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 139 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
                ;
 }
 
@@ -142,21 +160,21 @@ void SysTickIrq()
  * Functions
 
  *================================================*/
-# 129 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 145 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError)
 {
     // TODO change to macro
     if (SystemState->Error != IncomingError)
     {
         SystemState->PreviewError = SystemState->Error;
-        SystemState->Error = IncomingError;
+        SystemState->Error = (uint8_t)IncomingError;
     }
 }
 
 SystemError_t InitSystem(Data_t *SystemState)
 {
     SystemError_t ReturnValue = NOT_INITIALIZED;
-    SystemState->Error = ReturnValue;
+    SystemState->Error = (uint8_t)ReturnValue;
     SystemState->TempNominal = 55;
     SystemState->ServoPosition = 150;
 
@@ -174,12 +192,43 @@ SystemError_t InitSystem(Data_t *SystemState)
 
 /*================================================*
 
+ * RTOS Functions
+
+ *================================================*/
+# 178 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+void InitTask(Task_t *TaskMetric, uint32_t CallPrd)
+{
+
+    TaskMetric->StartTaskSysTick = 0;
+    TaskMetric->EndTaskSysTick = 0;
+    TaskMetric->TaskRunsCounter = 0;
+    TaskMetric->CallPeriod = CallPrd;
+}
+
+void PwmRoutine(void)
+{
+
+    // if (SysTick >= PwmRoutineMetric->StartTaskSysTick + PwmRoutineMetric->CallPeriod)
+    {
+        PwmRoutineMetric->StartTaskSysTick = SysTick;
+        myPwmDriver.setPWM(0 /* channel of PWM driver 0..15*/, 0, SystemState.ServoPosition);
+        // Serial.print(SystemState.ServoPosition);
+        // Serial.println("#");
+    }
+    PwmRoutineMetric->TaskRunsCounter++;
+    PwmRoutineMetric->EndTaskSysTick = SysTick;
+}
+
+/*================================================*
+
  * Main routine
 
  *================================================*/
-# 162 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 205 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void loop()
 {
+    // register all of the tasks which running prediodicaly win main loop
+    InitTask(PwmRoutineMetric, 1000 /* 1000*/);
 
     InitSystem(&SystemState);
 
@@ -208,11 +257,11 @@ void loop()
             // LastSysTick = SysTick;
             SystemState.ServoPosition = 150 + (SystemState.TempActual - 22) * 30;
         }
-
-        // if (SysTick >= LastSysTick + SERVO_UPDATE_PERIOD)
+        // TODO check osc feq in Adafruit library
+        // Check SDA i SCL pin number
+        if (SysTick >= PwmRoutineMetric->StartTaskSysTick + PwmRoutineMetric->CallPeriod)
         {
-            // LastSysTick = SysTick;
-            myPwmDriver.setPWM(0 /* channel of PWM driver 0..15*/, 0, SystemState.ServoPosition);
+            PwmRoutine();
         }
 
         if (SysTick >= LastSysTick + 1000 /* target pertiod = 60000 (60s)*/)
@@ -227,6 +276,7 @@ void loop()
                 Serial.print(", ");
                 pSystemStateBytes++;
             }
+
             Serial.println(CRC);
         }
     }

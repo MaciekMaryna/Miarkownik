@@ -53,7 +53,7 @@ enum SystemError_t
 /*================================================*
  * Structures and type defs
  *================================================*/
-typedef struct Data
+typedef struct
 {
     uint8_t TempNominal; // first position should have one byte width
     uint8_t TempActual;
@@ -61,9 +61,18 @@ typedef struct Data
     uint8_t ServoPosition;
     uint32_t TimeStamp;
 
-    SystemError_t PreviewError;
-    SystemError_t Error;
+    uint8_t PreviewError;
+    uint8_t Error;
 } Data_t;
+
+typedef struct
+{
+    void (*pFunction)(void);
+    uint32_t StartTaskSysTick;
+    uint32_t EndTaskSysTick;
+    uint32_t TaskRunsCounter;
+    uint32_t CallPeriod; // TODO perhaps magic numbers to set the calling periods will be not needed any more
+} Task_t;
 
 /*================================================*
  * Global variables
@@ -83,6 +92,13 @@ const byte MyTempSensorsAddress[NUMBER_OF_TEMP_SENSORS][8] PROGMEM = {
 OneWire onewire(ONEWIRE_PIN);
 // DS18B20 MyTempSensors object
 DS18B20 MyTempSensors(&onewire);
+
+/*================================================*
+ * RTOS Global variables
+ *================================================*/
+
+// set metric for all of the tasks which running prediodicaly win main loop
+Task_t *PwmRoutineMetric; // TODO find better name instead ...Metric
 
 /*================================================*
  * Arduino config function
@@ -132,14 +148,14 @@ void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError)
     if (SystemState->Error != IncomingError)
     {
         SystemState->PreviewError = SystemState->Error;
-        SystemState->Error = IncomingError;
+        SystemState->Error = (uint8_t)IncomingError;
     }
 }
 
 SystemError_t InitSystem(Data_t *SystemState)
 {
     SystemError_t ReturnValue = NOT_INITIALIZED;
-    SystemState->Error = ReturnValue;
+    SystemState->Error = (uint8_t)ReturnValue;
     SystemState->TempNominal = 55;
     SystemState->ServoPosition = SERVO_MIN;
 
@@ -156,11 +172,40 @@ SystemError_t InitSystem(Data_t *SystemState)
 }
 
 /*================================================*
+ * RTOS Functions
+ *================================================*/
+
+void InitTask(Task_t *TaskMetric, uint32_t CallPrd)
+{
+
+    TaskMetric->StartTaskSysTick = 0;
+    TaskMetric->EndTaskSysTick = 0;
+    TaskMetric->TaskRunsCounter = 0;
+    TaskMetric->CallPeriod = CallPrd;
+}
+
+void PwmRoutine(void)
+{
+
+    // if (SysTick >= PwmRoutineMetric->StartTaskSysTick + PwmRoutineMetric->CallPeriod)
+    {
+        PwmRoutineMetric->StartTaskSysTick = SysTick;
+        myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition);
+        // Serial.print(SystemState.ServoPosition);
+        // Serial.println("#");
+    }
+    PwmRoutineMetric->TaskRunsCounter++;
+    PwmRoutineMetric->EndTaskSysTick = SysTick;
+}
+
+/*================================================*
  * Main routine
  *================================================*/
 
 void loop()
 {
+    // register all of the tasks which running prediodicaly win main loop
+    InitTask(PwmRoutineMetric, SERVO_UPDATE_PERIOD);
 
     InitSystem(&SystemState);
 
@@ -189,11 +234,11 @@ void loop()
             // LastSysTick = SysTick;
             SystemState.ServoPosition = SERVO_MIN + (SystemState.TempActual - 22) * 30;
         }
-
-        // if (SysTick >= LastSysTick + SERVO_UPDATE_PERIOD)
+        // TODO check osc feq in Adafruit library
+        // Check SDA i SCL pin number
+        if (SysTick >= PwmRoutineMetric->StartTaskSysTick + PwmRoutineMetric->CallPeriod)
         {
-            // LastSysTick = SysTick;
-            myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition);
+            PwmRoutine();
         }
 
         if (SysTick >= LastSysTick + DATA_SEND_PERIOD)
@@ -208,6 +253,7 @@ void loop()
                 Serial.print(", ");
                 pSystemStateBytes++;
             }
+
             Serial.println(CRC);
         }
     }
