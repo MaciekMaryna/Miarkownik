@@ -7,3 +7,4 @@
 *.d
 *.last_used
 *.orig
+**/build

@@ -40,6 +40,19 @@
 /*================================================*
  *  Macros
  *================================================*/
+// TODO find better name instead ...Metric
+#define _InitTask(TASK_NAME, CALL_PERIOD) \
+    Task_t TASK_NAME##Metric = {(TASK_NAME), 0, 0, 0, CALL_PERIOD}
+
+#define _RunTask(TASK_NAME)                                                           \
+    if (SysTick >= TASK_NAME##Metric.StartTaskSysTick + TASK_NAME##Metric.CallPeriod) \
+    {                                                                                 \
+        TASK_NAME##Metric.StartTaskSysTick = SysTick;                                 \
+        (TASK_NAME)();                                                                \
+        TASK_NAME##Metric.CounterTaskRuns++;                                          \
+        TASK_NAME##Metric.EndTaskSysTick = SysTick;                                   \
+    }
+
 /*================================================*
  *  Enums
  *================================================*/
@@ -72,8 +85,8 @@ typedef struct
     void (*pFunction)(void);
     uint32_t StartTaskSysTick;
     uint32_t EndTaskSysTick;
-    uint32_t TaskRunsCounter;
-    uint32_t CallPeriod; // TODO perhaps magic numbers to set the calling periods will be not needed any more
+    uint32_t CounterTaskRuns;
+    uint32_t CallPeriod;
 } Task_t;
 
 /*================================================*
@@ -96,30 +109,35 @@ OneWire onewire(ONEWIRE_PIN);
 DS18B20 MyTempSensors(&onewire);
 
 /*================================================*
- * RTOS Global variables
+ * RTOS task initialization
  *================================================*/
-
-// set metric for all of the tasks which running prediodicaly win main loop
-Task_t *PwmRoutineMetric; // TODO find better name instead ...Metric
+#line 120 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+void setup();
+#line 147 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+void SysTickIrq();
+#line 157 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError);
+#line 167 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+SystemError_t InitHwSystem(Data_t *SystemState);
+#line 189 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+void ReadTempSensorsRoutine(void);
+#line 202 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+void CalculationRoutine(void);
+#line 210 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+void PwmRoutine(void);
+#line 215 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+void SendDataRoutine(void);
+#line 232 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+void loop();
+#line 112 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+_InitTask(ReadTempSensorsRoutine, TEMP_READ_PERIOD); // TODO align words order in arguments of _InitTask
+_InitTask(CalculationRoutine, CALCULATION_PERIOD);
+_InitTask(PwmRoutine, SERVO_UPDATE_PERIOD);
+_InitTask(SendDataRoutine, DATA_SEND_PERIOD);
 
 /*================================================*
  * Arduino config function
  *================================================*/
-#line 106 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-void setup();
-#line 133 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-void SysTickIrq();
-#line 145 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError);
-#line 155 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-SystemError_t InitSystem(Data_t *SystemState);
-#line 178 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-void InitTask(Task_t *TaskMetric, uint32_t CallPrd);
-#line 187 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-void PwmRoutine(void);
-#line 205 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-void loop();
-#line 106 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void setup()
 {
 
@@ -150,9 +168,7 @@ void setup()
 void SysTickIrq()
 {
     noInterrupts();
-
     SysTick++;
-
     interrupts();
 }
 
@@ -169,7 +185,7 @@ void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError)
     }
 }
 
-SystemError_t InitSystem(Data_t *SystemState)
+SystemError_t InitHwSystem(Data_t *SystemState)
 {
     SystemError_t ReturnValue = NOT_INITIALIZED;
     SystemState->Error = (uint8_t)ReturnValue;
@@ -191,28 +207,43 @@ SystemError_t InitSystem(Data_t *SystemState)
 /*================================================*
  * RTOS Functions
  *================================================*/
-
-void InitTask(Task_t *TaskMetric, uint32_t CallPrd)
+void ReadTempSensorsRoutine(void)
 {
+    if (MyTempSensors.available())
+    {
+        SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[0]));
+        for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
+        {
+            SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[i]));
+        }
+        MyTempSensors.request();
+    }
+}
 
-    TaskMetric->StartTaskSysTick = 0;
-    TaskMetric->EndTaskSysTick = 0;
-    TaskMetric->TaskRunsCounter = 0;
-    TaskMetric->CallPeriod = CallPrd;
+void CalculationRoutine(void)
+{
+    SystemState.ServoPosition = SERVO_MIN + (SystemState.TempActual - 22) * 10;
+    // TODO ServoPosition is to small(8bit). Values of calculation are above 255!
+    // TODO check osc feq in Adafruit library
+    // Check SDA i SCL pin number
 }
 
 void PwmRoutine(void)
 {
+    myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition);
+}
 
-    // if (SysTick >= PwmRoutineMetric->StartTaskSysTick + PwmRoutineMetric->CallPeriod)
+void SendDataRoutine(void)
+{
+    uint8_t CRC = 0xFF;                                    // TODO decision if calculation is neaded or remove CRC at all
+    uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
+
+    for (int i = 0; i < sizeof(Data_t); i++)
     {
-        PwmRoutineMetric->StartTaskSysTick = SysTick;
-        myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition);
-        // Serial.print(SystemState.ServoPosition);
-        // Serial.println("#");
+        sprintf(pSystemStateBytes, "%d, ", pSystemStateBytes[i]);
     }
-    PwmRoutineMetric->TaskRunsCounter++;
-    PwmRoutineMetric->EndTaskSysTick = SysTick;
+    Serial.print(*pSystemStateBytes);
+    Serial.println(CRC);
 }
 
 /*================================================*
@@ -221,57 +252,14 @@ void PwmRoutine(void)
 
 void loop()
 {
-    // register all of the tasks which running prediodicaly win main loop
-    InitTask(PwmRoutineMetric, SERVO_UPDATE_PERIOD);
+    InitHwSystem(&SystemState);
 
-    InitSystem(&SystemState);
-
-    MyTempSensors.request();
+    MyTempSensors.request(); // Perhaps line to cut because it fitst request was made in setup() - check after temp sendning will work properly
     while (1)
     {
-
-        if (SysTick >= LastSysTick + TEMP_READ_PERIOD)
-        {
-            LastSysTick = SysTick;
-            SystemState.TimeStamp = LastSysTick;
-
-            if (MyTempSensors.available())
-            {
-                SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[0]));
-                for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
-                {
-                    SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[i]));
-                }
-                MyTempSensors.request();
-            }
-        }
-
-        // if (SysTick >= LastSysTick + CALCULATION_PERIOD)
-        {
-            // LastSysTick = SysTick;
-            SystemState.ServoPosition = SERVO_MIN + (SystemState.TempActual - 22) * 30;
-        }
-        // TODO check osc feq in Adafruit library
-        // Check SDA i SCL pin number
-        if (SysTick >= PwmRoutineMetric->StartTaskSysTick + PwmRoutineMetric->CallPeriod)
-        {
-            PwmRoutine();
-        }
-
-        if (SysTick >= LastSysTick + DATA_SEND_PERIOD)
-        {
-            // LastSysTick = SysTick;
-            uint8_t CRC = 0xFF;                                    // TODO calculation if neaded
-            uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
-
-            for (int i = 0; i < sizeof(Data_t); i++)
-            {
-                Serial.print(*pSystemStateBytes);
-                Serial.print(", ");
-                pSystemStateBytes++;
-            }
-
-            Serial.println(CRC);
-        }
+        _RunTask(ReadTempSensorsRoutine);
+        _RunTask(CalculationRoutine);
+        _RunTask(PwmRoutine);
+        _RunTask(SendDataRoutine);
     }
 }
