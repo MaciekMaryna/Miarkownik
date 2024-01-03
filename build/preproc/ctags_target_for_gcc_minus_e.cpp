@@ -18,21 +18,21 @@
  * Defines
 
  *================================================*/
-# 38 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 44 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 /*================================================*
 
  *  Macros
 
  *================================================*/
-# 41 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 47 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 // TODO find better name instead ...Metric
-# 54 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 60 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 /*================================================*
 
  *  Enums
 
  *================================================*/
-# 57 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 63 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 enum SystemError_t
 {
     NO_ERROR,
@@ -47,7 +47,7 @@ enum SystemError_t
  * Structures and type defs
 
  *================================================*/
-# 69 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 75 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 typedef struct
 {
     uint8_t TempNominal; // first position should have one byte width
@@ -62,7 +62,6 @@ typedef struct
 
 typedef struct
 {
-    void (*pFunction)(void);
     uint32_t StartTaskSysTick;
     uint32_t EndTaskSysTick;
     uint32_t CounterTaskRuns;
@@ -74,7 +73,7 @@ typedef struct
  * Global variables
 
  *================================================*/
-# 93 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 98 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 uint32_t SysTick = 0;
 uint32_t LastSysTick = 0;
 
@@ -84,9 +83,9 @@ Data_t SystemState;
 Adafruit_PWMServoDriver myPwmDriver = Adafruit_PWMServoDriver();
 
 const byte MyTempSensorsAddress[6][8] 
-# 101 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
+# 106 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
                                                           __attribute__((__progmem__)) 
-# 101 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 106 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
                                                                   = {
     0x28, 0xA0, 0x7D, 0x81, 0x4D, 0x20, 0x1, 0x2B /* Actual temp sensor!!!*/, 0x28, 0x50, 0xD2, 0x9B, 0x4D, 0x20, 0x1, 0x26, 0x28, 0x6E, 0xCA, 0x86, 0x4D, 0x20, 0x1, 0x3F, 0x28, 0xB7, 0xC, 0xA6, 0x4D, 0x20, 0x1, 0xA3, 0x28, 0xFF, 0x4D, 0xE4, 0xC1, 0x17, 0x5, 0x4F, 0x28, 0xFF, 0x6B, 0xCB, 0x83, 0x17, 0x4, 0xE1};
 
@@ -100,18 +99,19 @@ DS18B20 MyTempSensors(&onewire);
  * RTOS task initialization
 
  *================================================*/
-# 112 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
-Task_t ReadTempSensorsRoutineMetric = {(ReadTempSensorsRoutine), 0, 0, 0, 1000 /* 1000*/}; // TODO align words order in arguments of _InitTask
-Task_t CalculationRoutineMetric = {(CalculationRoutine), 0, 0, 0, 1000};
-Task_t PwmRoutineMetric = {(PwmRoutine), 0, 0, 0, 1000 /* 1000*/};
-Task_t SendDataRoutineMetric = {(SendDataRoutine), 0, 0, 0, 1000 /* target pertiod = 60000 (60s)*/};
+# 117 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+Task_t ReadTempSensorsRoutineMetric = {0, 0, 0, 1000 /* 1000*/}; // TODO align words order in arguments of _InitTask
+Task_t CalculationRoutineMetric = {0, 0, 0, 1000};
+Task_t ServoPositioningRoutineMetric = {0, 0, 0, 1000 /* 1000*/};
+Task_t SendDataRoutineMetric = {0, 0, 0, 1000 /* target pertiod = 60000 (60s)*/};
+Task_t BenchmarkRoutineMetric = {0, 0, 0, 10000000};
 
 /*================================================*
 
  * Arduino config function
 
  *================================================*/
-# 120 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 126 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void setup()
 {
 
@@ -141,19 +141,19 @@ void setup()
  * Interrrupt Routines
 
  *================================================*/
-# 147 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 153 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void SysTickIrq()
 {
     
-# 149 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
+# 155 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
    __asm__ __volatile__ ("cli" ::: "memory")
-# 149 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 155 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
                  ;
     SysTick++;
     
-# 151 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
+# 157 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino" 3
    __asm__ __volatile__ ("sei" ::: "memory")
-# 151 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 157 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
                ;
 }
 
@@ -162,7 +162,7 @@ void SysTickIrq()
  * Functions
 
  *================================================*/
-# 157 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 163 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError)
 {
     // TODO change to macro
@@ -197,44 +197,84 @@ SystemError_t InitHwSystem(Data_t *SystemState)
  * RTOS Functions
 
  *================================================*/
-# 189 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 195 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void ReadTempSensorsRoutine(void)
 {
     if (MyTempSensors.available())
     {
-        SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(( reinterpret_cast< const __FlashStringHelper * >( MyTempSensorsAddress[0] ) ));
-        for (byte i = 1; i < 6; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
+        if (false == MyTempSensors.request())
         {
-            SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(( reinterpret_cast< const __FlashStringHelper * >( MyTempSensorsAddress[i] ) ));
+            // TODO error reporting
         }
-        MyTempSensors.request();
+        else
+        {
+            SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(( reinterpret_cast< const __FlashStringHelper * >( MyTempSensorsAddress[0] ) ));
+            for (byte i = 1; i < 6; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
+            {
+                SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(( reinterpret_cast< const __FlashStringHelper * >( MyTempSensorsAddress[i] ) ));
+            }
+            SystemState.TimeStamp = SysTick;
+        }
     }
 }
 
 void CalculationRoutine(void)
 {
-    SystemState.ServoPosition = 150 + (SystemState.TempActual - 22) * 10;
-    // TODO ServoPosition is to small(8bit). Values of calculation are above 255!
-    // TODO check osc feq in Adafruit library
-    // Check SDA i SCL pin number
+    if (SystemState.TempActual < 21)
+    {
+        SystemState.TempActual = 21;
+    }
+    else if (SystemState.TempActual > 36)
+    {
+        SystemState.TempActual = 36;
+    }
+    else
+    {
+        SystemState.ServoPosition = (SystemState.TempActual - 21) * ((100) / ((36) - (21))) /*!!! care about non-zero demoninator !!!*/; // value in % of full range (normalized to 100%)
+        // TODO check osc feq in Adafruit library
+    }
 }
 
-void PwmRoutine(void)
+void ServoPositioningRoutine(void)
 {
-    myPwmDriver.setPWM(0 /* channel of PWM driver 0..15*/, 0, SystemState.ServoPosition);
+    myPwmDriver.setPWM(0 /* channel of PWM driver 0..15*/, 0, SystemState.ServoPosition * (((600) - (150)) / (100)) + 150);
+    // TODO check phisical MIN and MAX position of servo
 }
 
 void SendDataRoutine(void)
 {
-    uint8_t CRC = 0xFF; // TODO decision if calculation is neaded or remove CRC at all
+    /*
+
     uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
 
     for (int i = 0; i < sizeof(Data_t); i++)
+
     {
-        sprintf(pSystemStateBytes, "%d, ", pSystemStateBytes[i]);
+
+        Serial.print(pSystemStateBytes[i]);
+
+        Serial.print(", ");
+
     }
-    Serial.print(*pSystemStateBytes);
-    Serial.println(CRC);
+
+    Serial.println("");
+
+    */
+# 249 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+    uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
+    String buf1;
+    for (int i = 0; i < sizeof(Data_t); i++)
+    {
+        buf1 = String(buf1 + pSystemStateBytes[i] + ", ");
+    }
+    Serial.println(buf1);
+}
+
+void BenchmarkRoutine(void)
+{
+    Serial.println("ReadTempSensorsRoutine:");
+    Serial.println("Runs: ");
+    Serial.println("Time: ");
 }
 
 /*================================================*
@@ -242,17 +282,18 @@ void SendDataRoutine(void)
  * Main routine
 
  *================================================*/
-# 232 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
+# 269 "C:\\Users\\maryn\\OneDrive\\Pulpit\\Miarkownik\\Miarkownik.ino"
 void loop()
 {
     InitHwSystem(&SystemState);
 
-    MyTempSensors.request(); // Perhaps line to cut because it fitst request was made in setup() - check after temp sendning will work properly
+    // MyTempSensors.request(); // Perhaps line to cut because it fitst request was made in setup() - check after temp sendning will work properly
     while (1)
     {
         if (SysTick >= ReadTempSensorsRoutineMetric.StartTaskSysTick + ReadTempSensorsRoutineMetric.CallPeriod) { ReadTempSensorsRoutineMetric.StartTaskSysTick = SysTick; (ReadTempSensorsRoutine)(); ReadTempSensorsRoutineMetric.CounterTaskRuns++; ReadTempSensorsRoutineMetric.EndTaskSysTick = SysTick; };
         if (SysTick >= CalculationRoutineMetric.StartTaskSysTick + CalculationRoutineMetric.CallPeriod) { CalculationRoutineMetric.StartTaskSysTick = SysTick; (CalculationRoutine)(); CalculationRoutineMetric.CounterTaskRuns++; CalculationRoutineMetric.EndTaskSysTick = SysTick; };
-        if (SysTick >= PwmRoutineMetric.StartTaskSysTick + PwmRoutineMetric.CallPeriod) { PwmRoutineMetric.StartTaskSysTick = SysTick; (PwmRoutine)(); PwmRoutineMetric.CounterTaskRuns++; PwmRoutineMetric.EndTaskSysTick = SysTick; };
+        if (SysTick >= ServoPositioningRoutineMetric.StartTaskSysTick + ServoPositioningRoutineMetric.CallPeriod) { ServoPositioningRoutineMetric.StartTaskSysTick = SysTick; (ServoPositioningRoutine)(); ServoPositioningRoutineMetric.CounterTaskRuns++; ServoPositioningRoutineMetric.EndTaskSysTick = SysTick; };
         if (SysTick >= SendDataRoutineMetric.StartTaskSysTick + SendDataRoutineMetric.CallPeriod) { SendDataRoutineMetric.StartTaskSysTick = SysTick; (SendDataRoutine)(); SendDataRoutineMetric.CounterTaskRuns++; SendDataRoutineMetric.EndTaskSysTick = SysTick; };
+        if (SysTick >= BenchmarkRoutineMetric.StartTaskSysTick + BenchmarkRoutineMetric.CallPeriod) { BenchmarkRoutineMetric.StartTaskSysTick = SysTick; (BenchmarkRoutine)(); BenchmarkRoutineMetric.CounterTaskRuns++; BenchmarkRoutineMetric.EndTaskSysTick = SysTick; };
     }
 }

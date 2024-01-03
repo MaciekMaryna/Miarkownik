@@ -20,10 +20,16 @@
 #define TEMP_READ_PERIOD 1000    // 1000
 #define SERVO_UPDATE_PERIOD 1000 // 1000
 #define CALCULATION_PERIOD 1000
+#define BENCHMARK_PERIOD 10000000
 
 #define SERVO_CHANNEL 0 // channel of PWM driver 0..15
 #define SERVO_MIN 150
 #define SERVO_MAX 600
+#define SERVO_RATIO (((SERVO_MAX) - (SERVO_MIN)) / (100))
+
+#define TEMP_LOW_LIMIT 21
+#define TEMP_HIGH_LIMIT 36
+#define TEMP_RATIO ((100) / ((TEMP_HIGH_LIMIT) - (TEMP_LOW_LIMIT))) //!!! care about non-zero demoninator !!!
 
 #define ONEWIRE_PIN 2
 
@@ -40,7 +46,7 @@
  *================================================*/
 // TODO find better name instead ...Metric
 #define _InitTask(TASK_NAME, CALL_PERIOD) \
-    Task_t TASK_NAME##Metric = {(TASK_NAME), 0, 0, 0, CALL_PERIOD}
+    Task_t TASK_NAME##Metric = {0, 0, 0, CALL_PERIOD}
 
 #define _RunTask(TASK_NAME)                                                           \
     if (SysTick >= TASK_NAME##Metric.StartTaskSysTick + TASK_NAME##Metric.CallPeriod) \
@@ -80,7 +86,6 @@ typedef struct
 
 typedef struct
 {
-    void (*pFunction)(void);
     uint32_t StartTaskSysTick;
     uint32_t EndTaskSysTick;
     uint32_t CounterTaskRuns;
@@ -111,8 +116,9 @@ DS18B20 MyTempSensors(&onewire);
  *================================================*/
 _InitTask(ReadTempSensorsRoutine, TEMP_READ_PERIOD); // TODO align words order in arguments of _InitTask
 _InitTask(CalculationRoutine, CALCULATION_PERIOD);
-_InitTask(PwmRoutine, SERVO_UPDATE_PERIOD);
+_InitTask(ServoPositioningRoutine, SERVO_UPDATE_PERIOD);
 _InitTask(SendDataRoutine, DATA_SEND_PERIOD);
+_InitTask(BenchmarkRoutine, BENCHMARK_PERIOD);
 
 /*================================================*
  * Arduino config function
@@ -190,39 +196,70 @@ void ReadTempSensorsRoutine(void)
 {
     if (MyTempSensors.available())
     {
-        SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[0]));
-        for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
+        if (false == MyTempSensors.request())
         {
-            SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[i]));
+            // TODO error reporting
         }
-        MyTempSensors.request();
+        else
+        {
+            SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[0]));
+            for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
+            {
+                SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[i]));
+            }
+            SystemState.TimeStamp = SysTick;
+        }
     }
 }
 
 void CalculationRoutine(void)
 {
-    SystemState.ServoPosition = SERVO_MIN + (SystemState.TempActual - 22) * 10;
-    // TODO ServoPosition is to small(8bit). Values of calculation are above 255!
-    // TODO check osc feq in Adafruit library
-    // Check SDA i SCL pin number
+    if (SystemState.TempActual < TEMP_LOW_LIMIT)
+    {
+        SystemState.TempActual = TEMP_LOW_LIMIT;
+    }
+    else if (SystemState.TempActual > TEMP_HIGH_LIMIT)
+    {
+        SystemState.TempActual = TEMP_HIGH_LIMIT;
+    }
+    else
+    {
+        SystemState.ServoPosition = (SystemState.TempActual - TEMP_LOW_LIMIT) * TEMP_RATIO; // value in % of full range (normalized to 100%)
+        // TODO check osc feq in Adafruit library
+    }
 }
 
-void PwmRoutine(void)
+void ServoPositioningRoutine(void)
 {
-    myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition);
+    myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition * SERVO_RATIO + SERVO_MIN);
+    // TODO check phisical MIN and MAX position of servo
 }
 
 void SendDataRoutine(void)
 {
-    uint8_t CRC = 0xFF;                                    // TODO decision if calculation is neaded or remove CRC at all
+    /*
     uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
-
     for (int i = 0; i < sizeof(Data_t); i++)
     {
-        sprintf(pSystemStateBytes, "%d, ", pSystemStateBytes[i]);
+        Serial.print(pSystemStateBytes[i]);
+        Serial.print(", ");
     }
-    Serial.print(*pSystemStateBytes);
-    Serial.println(CRC);
+    Serial.println("");
+    */
+    uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
+    String buf1;
+    for (int i = 0; i < sizeof(Data_t); i++)
+    {
+        buf1 = String(buf1 + pSystemStateBytes[i] + ", ");
+    }
+    Serial.println(buf1);
+}
+
+void BenchmarkRoutine(void)
+{
+    Serial.println("ReadTempSensorsRoutine:");
+    Serial.println("Runs: ");
+    Serial.println("Time: ");
 }
 
 /*================================================*
@@ -233,12 +270,13 @@ void loop()
 {
     InitHwSystem(&SystemState);
 
-    MyTempSensors.request(); // Perhaps line to cut because it fitst request was made in setup() - check after temp sendning will work properly
+    // MyTempSensors.request(); // Perhaps line to cut because it fitst request was made in setup() - check after temp sendning will work properly
     while (1)
     {
         _RunTask(ReadTempSensorsRoutine);
         _RunTask(CalculationRoutine);
-        _RunTask(PwmRoutine);
+        _RunTask(ServoPositioningRoutine);
         _RunTask(SendDataRoutine);
+        _RunTask(BenchmarkRoutine);
     }
 }
