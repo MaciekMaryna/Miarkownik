@@ -66,6 +66,8 @@ enum SystemError_t
     NOT_INITIALIZED,
     GENERAL_TEMP_SENSORS_ERROR,
     SPECIFIC_TEMP_SENSORS_ERROR,
+    MEASUREMENT_RESULT_NOT_READY,
+    SERVO_POSITIONING_ERROR,
     NUMBER_OF_ERRORS
 };
 
@@ -170,14 +172,14 @@ void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError)
     }
 }
 
-SystemError_t InitHwSystem(Data_t *SystemState)
+SystemError_t InitHwSystem(void)
 {
     SystemError_t ReturnValue = NOT_INITIALIZED;
-    SystemState->Error = (uint8_t)ReturnValue;
-    SystemState->TempNominal = 55;
-    SystemState->ServoPosition = SERVO_MIN;
+    SystemState.Error = (uint8_t)ReturnValue;
+    SystemState.TempNominal = 55;
+    SystemState.ServoPosition = SERVO_MIN;
 
-    if (!MyTempSensors.available())
+    if (false == MyTempSensors.available())
     {
         ReturnValue = GENERAL_TEMP_SENSORS_ERROR;
     }
@@ -185,7 +187,7 @@ SystemError_t InitHwSystem(Data_t *SystemState)
     {
         ReturnValue = NO_ERROR;
     }
-    ErrorStatusChange(SystemState, ReturnValue);
+    ErrorStatusChange(&SystemState, ReturnValue);
     return ReturnValue;
 }
 
@@ -196,11 +198,8 @@ void ReadTempSensorsRoutine(void)
 {
     if (MyTempSensors.available())
     {
-        if (false == MyTempSensors.request())
-        {
-            // TODO error reporting
-        }
-        else
+
+        if (true == MyTempSensors.request())
         {
             SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[0]));
             for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
@@ -208,6 +207,10 @@ void ReadTempSensorsRoutine(void)
                 SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[i]));
             }
             SystemState.TimeStamp = SysTick;
+        }
+        else
+        {
+            ErrorStatusChange(&SystemState, MEASUREMENT_RESULT_NOT_READY);
         }
     }
 }
@@ -224,28 +227,26 @@ void CalculationRoutine(void)
     }
     else
     {
-        SystemState.ServoPosition = (SystemState.TempActual - TEMP_LOW_LIMIT) * TEMP_RATIO; // value in % of full range (normalized to 100%)
+        SystemState.ServoPosition = (SystemState.TempActual - TEMP_LOW_LIMIT) * TEMP_RATIO; // value as % of full range (normalized to 100%)
         // TODO check osc feq in Adafruit library
     }
 }
 
 void ServoPositioningRoutine(void)
 {
-    myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition * SERVO_RATIO + SERVO_MIN);
+    if (true == myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition * SERVO_RATIO + SERVO_MIN))
+    {
+        // do nothing more than setPWM in line above
+    }
+    else
+    {
+        ErrorStatusChange(&SystemState, SERVO_POSITIONING_ERROR);
+    }
     // TODO check phisical MIN and MAX position of servo
 }
 
 void SendDataRoutine(void)
 {
-    /*
-    uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
-    for (int i = 0; i < sizeof(Data_t); i++)
-    {
-        Serial.print(pSystemStateBytes[i]);
-        Serial.print(", ");
-    }
-    Serial.println("");
-    */
     uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
     String buf1;
     for (int i = 0; i < sizeof(Data_t); i++)
@@ -268,9 +269,9 @@ void BenchmarkRoutine(void)
 
 void loop()
 {
-    InitHwSystem(&SystemState);
+    InitHwSystem();
 
-    // MyTempSensors.request(); // Perhaps line to cut because it fitst request was made in setup() - check after temp sendning will work properly
+    MyTempSensors.request(); // Perhaps line to cut because it fitst request was made in setup() - check after temp sendning will work properly
     while (1)
     {
         _RunTask(ReadTempSensorsRoutine);
