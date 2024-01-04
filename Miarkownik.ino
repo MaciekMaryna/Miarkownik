@@ -16,9 +16,9 @@
 #define TICKS_PER_SEC (1000000 / SYS_TIC_PERIOD) // freq of SysTck
 
 #define LED_PERIOD 300
-#define DATA_SEND_PERIOD 1000    // target pertiod = 60000 (60s)
-#define TEMP_READ_PERIOD 1000    // 1000
-#define SERVO_UPDATE_PERIOD 1000 // 1000
+#define SEND_DATA_PERIOD 1000          // target pertiod = 60000 (60s)
+#define READ_TEMP_SENSORS_PERIOD 1000  // 1000
+#define SERVO_POSITIONINIG_PERIOD 1000 // 1000
 #define CALCULATION_PERIOD 1000
 #define BENCHMARK_PERIOD 10000000
 
@@ -41,20 +41,17 @@
 #define T6 0x28, 0xFF, 0x6B, 0xCB, 0x83, 0x17, 0x4, 0xE1
 
 #define NUMBER_OF_TEMP_SENSORS 6
+
 /*================================================*
  *  Macros
  *================================================*/
-// TODO find better name instead ...Metric
-#define _InitTask(TASK_NAME, CALL_PERIOD) \
-    Task_t TASK_NAME##Metric = {0, 0, 0, CALL_PERIOD}
-
-#define _RunTask(TASK_NAME)                                                           \
-    if (SysTick >= TASK_NAME##Metric.StartTaskSysTick + TASK_NAME##Metric.CallPeriod) \
-    {                                                                                 \
-        TASK_NAME##Metric.StartTaskSysTick = SysTick;                                 \
-        (TASK_NAME)();                                                                \
-        TASK_NAME##Metric.CounterTaskRuns++;                                          \
-        TASK_NAME##Metric.EndTaskSysTick = SysTick;                                   \
+#define _RunTask(TASK_NAME)                                                                   \
+    if (SysTick >= (TASK_NAME##_Handler->StartTaskSysTick + TASK_NAME##_Handler->CallPeriod)) \
+    {                                                                                         \
+        TASK_NAME##_Handler->StartTaskSysTick = SysTick;                                      \
+        (TASK_NAME##_Routine)();                                                              \
+        TASK_NAME##_Handler->CounterTaskRuns++;                                               \
+        TASK_NAME##_Handler->EndTaskSysTick = SysTick;                                        \
     }
 
 /*================================================*
@@ -66,7 +63,7 @@ enum SystemError_t
     NOT_INITIALIZED,
     GENERAL_TEMP_SENSORS_ERROR,
     SPECIFIC_TEMP_SENSORS_ERROR,
-    MEASUREMENT_RESULT_NOT_READY,
+    MEASUREMENT_TEMP_SENSORS_NOT_READY,
     SERVO_POSITIONING_ERROR,
     NUMBER_OF_ERRORS
 };
@@ -88,8 +85,10 @@ typedef struct
 
 typedef struct
 {
+    void (*TaskName)(void);
     uint32_t StartTaskSysTick;
     uint32_t EndTaskSysTick;
+    // TODO add acummulative time
     uint32_t CounterTaskRuns;
     uint32_t CallPeriod;
 } Task_t;
@@ -112,15 +111,6 @@ const byte MyTempSensorsAddress[NUMBER_OF_TEMP_SENSORS][8] PROGMEM = {
 OneWire onewire(ONEWIRE_PIN);
 // DS18B20 MyTempSensors object
 DS18B20 MyTempSensors(&onewire);
-
-/*================================================*
- * RTOS task initialization
- *================================================*/
-_InitTask(ReadTempSensorsRoutine, TEMP_READ_PERIOD); // TODO align words order in arguments of _InitTask
-_InitTask(CalculationRoutine, CALCULATION_PERIOD);
-_InitTask(ServoPositioningRoutine, SERVO_UPDATE_PERIOD);
-_InitTask(SendDataRoutine, DATA_SEND_PERIOD);
-_InitTask(BenchmarkRoutine, BENCHMARK_PERIOD);
 
 /*================================================*
  * Arduino config function
@@ -150,7 +140,7 @@ void setup()
 }
 
 /*================================================*
- * Interrrupt Routines
+ * Interrrupt _Routines
  *================================================*/
 void SysTickIrq()
 {
@@ -162,6 +152,19 @@ void SysTickIrq()
 /*================================================*
  * Functions
  *================================================*/
+Task_t *_InitTask(void (*preset_TaskName)(void), uint32_t preset_StartTaskSysTick, uint32_t preset_EndTaskSysTick, uint32_t preset_CounterTaskRuns, uint32_t preset_CallPeriod)
+{
+    Task_t *pTaskMetric = (Task_t *)malloc(sizeof(Task_t));
+
+    pTaskMetric->TaskName = preset_TaskName;
+    pTaskMetric->StartTaskSysTick = preset_StartTaskSysTick;
+    pTaskMetric->EndTaskSysTick = preset_EndTaskSysTick;
+    pTaskMetric->CounterTaskRuns = preset_CounterTaskRuns;
+    pTaskMetric->CallPeriod = preset_CallPeriod;
+
+    return pTaskMetric;
+}
+
 void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError)
 {
     // TODO change to macro
@@ -192,9 +195,9 @@ SystemError_t InitHwSystem(void)
 }
 
 /*================================================*
- * RTOS Functions
+ * RTOS Routines
  *================================================*/
-void ReadTempSensorsRoutine(void)
+void ReadTempSensors_Routine(void)
 {
     if (MyTempSensors.available())
     {
@@ -210,12 +213,12 @@ void ReadTempSensorsRoutine(void)
         }
         else
         {
-            ErrorStatusChange(&SystemState, MEASUREMENT_RESULT_NOT_READY);
+            ErrorStatusChange(&SystemState, MEASUREMENT_TEMP_SENSORS_NOT_READY);
         }
     }
 }
 
-void CalculationRoutine(void)
+void Calculation_Routine(void)
 {
     if (SystemState.TempActual < TEMP_LOW_LIMIT)
     {
@@ -232,9 +235,9 @@ void CalculationRoutine(void)
     }
 }
 
-void ServoPositioningRoutine(void)
+void ServoPositioning_Routine(void)
 {
-    if (true == myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition * SERVO_RATIO + SERVO_MIN))
+    if (false == myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition * SERVO_RATIO + SERVO_MIN))
     {
         // do nothing more than setPWM in line above
     }
@@ -245,7 +248,7 @@ void ServoPositioningRoutine(void)
     // TODO check phisical MIN and MAX position of servo
 }
 
-void SendDataRoutine(void)
+void SendData_Routine(void)
 {
     uint8_t *pSystemStateBytes = &SystemState.TempNominal; // pointer to first position of struct which is one(!) byte width
     String buf1;
@@ -256,9 +259,9 @@ void SendDataRoutine(void)
     Serial.println(buf1);
 }
 
-void BenchmarkRoutine(void)
+void Benchmark_Routine(void)
 {
-    Serial.println("ReadTempSensorsRoutine:");
+    Serial.println("ReadTempSensors_Routine:");
     Serial.println("Runs: ");
     Serial.println("Time: ");
 }
@@ -271,13 +274,20 @@ void loop()
 {
     InitHwSystem();
 
-    MyTempSensors.request(); // Perhaps line to cut because it fitst request was made in setup() - check after temp sendning will work properly
+    Task_t *ReadTempSensors_Handler = _InitTask(ReadTempSensors_Routine, 0, 0, 0, READ_TEMP_SENSORS_PERIOD);
+    Task_t *Calculation_Handler = _InitTask(Calculation_Routine, 0, 0, 0, CALCULATION_PERIOD);
+    Task_t *ServoPositioning_Handler = _InitTask(ServoPositioning_Routine, 0, 0, 0, SERVO_POSITIONINIG_PERIOD);
+    Task_t *SendData_Handler = _InitTask(SendData_Routine, 0, 0, 0, SEND_DATA_PERIOD);
+    Task_t *Benchmark_Handler = _InitTask(Benchmark_Routine, 0, 0, 0, BENCHMARK_PERIOD);
+    SendData_Handler->CallPeriod = SEND_DATA_PERIOD;
+
     while (1)
     {
-        _RunTask(ReadTempSensorsRoutine);
-        _RunTask(CalculationRoutine);
-        _RunTask(ServoPositioningRoutine);
-        _RunTask(SendDataRoutine);
-        _RunTask(BenchmarkRoutine);
+        _RunTask(ReadTempSensors);
+        _RunTask(Calculation);
+        _RunTask(ServoPositioning);
+        _RunTask(SendData);
+
+        //_RunTask(Benchmark);
     }
 }
