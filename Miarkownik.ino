@@ -23,15 +23,21 @@
 #define BENCHMARK_PERIOD 10000000
 
 #define SERVO_CHANNEL 0 // channel of PWM driver 0..15
-#define SERVO_MIN 150
-#define SERVO_MAX 600
+#define SERVO_MIN 80
+// 100 for 9g blue servo //150
+// 80 for TD-6620MG servo
+
+#define SERVO_MAX 700
+// 680 for 9g blue servo //600
+// 700 for TD-6620MG servo
 #define SERVO_RATIO (((SERVO_MAX) - (SERVO_MIN)) / (100))
 
 #define TEMP_LOW_LIMIT 21
-#define TEMP_HIGH_LIMIT 36
+#define TEMP_HIGH_LIMIT 71                                          // 36
 #define TEMP_RATIO ((100) / ((TEMP_HIGH_LIMIT) - (TEMP_LOW_LIMIT))) //!!! care about non-zero demoninator !!!
 
 #define ONEWIRE_PIN 2
+#define BUZZER_PIN 3
 
 #define T1 0x28, 0xA0, 0x7D, 0x81, 0x4D, 0x20, 0x1, 0x2B // Actual temp sensor!!!
 #define T2 0x28, 0x50, 0xD2, 0x9B, 0x4D, 0x20, 0x1, 0x26
@@ -79,7 +85,7 @@ typedef struct
     uint8_t ServoPosition;
     uint32_t TimeStamp;
 
-    uint8_t PreviewError;
+    uint8_t PreviousError;
     uint8_t Error;
 } Data_t;
 
@@ -170,7 +176,7 @@ void ErrorStatusChange(Data_t *SystemState, SystemError_t IncomingError)
     // TODO change to macro
     if (SystemState->Error != IncomingError)
     {
-        SystemState->PreviewError = SystemState->Error;
+        SystemState->PreviousError = SystemState->Error;
         SystemState->Error = (uint8_t)IncomingError;
     }
 }
@@ -205,7 +211,7 @@ void ReadTempSensors_Routine(void)
         if (true == MyTempSensors.request())
         {
             SystemState.TempActual = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[0]));
-            for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++) // counting starting from value 1 cause 0 value is actual temp sensor (see line below)
+            for (byte i = 1; i < NUMBER_OF_TEMP_SENSORS; i++) // counting starts from value 1 cause 0 value is actual temp sensor (see line below)
             {
                 SystemState.Temp[i - 1] = (uint8_t)MyTempSensors.readTemperature(FA(MyTempSensorsAddress[i]));
             }
@@ -231,21 +237,34 @@ void Calculation_Routine(void)
     else
     {
         SystemState.ServoPosition = (SystemState.TempActual - TEMP_LOW_LIMIT) * TEMP_RATIO; // value as % of full range (normalized to 100%)
-        // TODO check osc feq in Adafruit library
     }
 }
 
 void ServoPositioning_Routine(void)
 {
-    if (false == myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition * SERVO_RATIO + SERVO_MIN))
-    {
-        // do nothing more than setPWM in line above
-    }
-    else
+    static uint8_t PreviousServoPosition;
+
+    // PreviousServoPosition = (PreviousServoPosition == 250) ? 280 : 250;
+    // myPwmDriver.setPWM(SERVO_CHANNEL, 0, PreviousServoPosition);
+    if (false != myPwmDriver.setPWM(SERVO_CHANNEL, 0, SystemState.ServoPosition * SERVO_RATIO + SERVO_MIN))
     {
         ErrorStatusChange(&SystemState, SERVO_POSITIONING_ERROR);
     }
-    // TODO check phisical MIN and MAX position of servo
+
+    if (PreviousServoPosition > SystemState.ServoPosition) // air intake decrease command
+    {
+        // TODO
+        // double beep
+        // double led flash
+    }
+
+    if (PreviousServoPosition < SystemState.ServoPosition) // air intake increase command
+    {
+        // single beep
+        // single led flash
+    }
+
+    PreviousServoPosition = SystemState.ServoPosition;
 }
 
 void SendData_Routine(void)
@@ -279,7 +298,6 @@ void loop()
     Task_t *ServoPositioning_Handler = _InitTask(ServoPositioning_Routine, 0, 0, 0, SERVO_POSITIONINIG_PERIOD);
     Task_t *SendData_Handler = _InitTask(SendData_Routine, 0, 0, 0, SEND_DATA_PERIOD);
     Task_t *Benchmark_Handler = _InitTask(Benchmark_Routine, 0, 0, 0, BENCHMARK_PERIOD);
-    SendData_Handler->CallPeriod = SEND_DATA_PERIOD;
 
     while (1)
     {
@@ -291,3 +309,48 @@ void loop()
         //_RunTask(Benchmark);
     }
 }
+
+/*================================================*
+ * TODO
+ *================================================*
+    Decision to split regulation and monitoring functionality to separate microcontrolers
+    Benchmark task
+
+    SD card recording
+    LCD 4 lines or 2 lines + keys
+    RGB strip vizualisation
+    Buzzer
+    LEDs shows +/- move of servo
+
+    Control panel options:
+    ==============================
+    Switches and buttons
+        auto - PID regulation
+        manu - MIN position
+        manu - MAX position
+
+        manu - increese ait intake
+        manu - decrease air intake
+
+    Status lamps
+        LED - regulation trend (buzzer)
+        RGB LED STRIP - buffer
+
+    Displays
+        LCD
+         - actual temp
+         - nominal temp,
+         - temps of 4 buffer points
+
+    Other hardware features
+        - RTC
+        - micro SD card logging with time TimeStamp
+        - Front panel LEDs show: openinig and closeing, min and max pos ???
+
+    Further features:
+        - voltometer of UPS battery
+        - Pure sineDC/Ac converter
+        - UPS how to swich power without glitch
+        - Supply all devices of system from safet power source
+
+ *================================================*/
